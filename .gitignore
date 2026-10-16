@@ -1,0 +1,47 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.egg-info/
+data/
+backups/
+*.parquet
+*.csv
+*.dump
+*.log
+.DS_Store
+
+# Local secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python environment and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated datasets and local data lake
+/data/raw/
+/data/processed/
+/data/lake/
+*.parquet
+
+# Database backups
+/backups/
+*.dump
+*.backup
+
+# Local logs and temporary files
+/logs/
+*.log
+.DS_Store
