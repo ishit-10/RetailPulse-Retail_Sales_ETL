@@ -14,15 +14,30 @@ line_totals AS (
  WHERE type='REFUND' AND status='SUCCEEDED' GROUP BY 1
 ), credits AS (
  SELECT invoice_line_id,sum(quantity) q,sum(taxable_value) v,sum(cgst) c,sum(sgst) s,sum(igst) i FROM source.credit_note_lines GROUP BY 1
+), daily_stock AS (
+ -- Aggregate before snapshots: avoid multiplying every ledger movement by all
+ -- later snapshots (large temporary files in the former range join).
+ SELECT (event_at AT TIME ZONE 'Asia/Kolkata')::date AS business_day,sku_id,location_id,stock_state,
+ sum(quantity) quantity,0 marker,NULL::bigint expected
+ FROM source.inventory_movements GROUP BY 1,2,3,4
+), stock_timeline AS (
+ SELECT * FROM daily_stock
+ UNION ALL
+ SELECT s.snapshot_date,s.sku_id,s.location_id,v.stock_state,0,1,v.expected
+ FROM source.inventory_snapshots s
+ CROSS JOIN LATERAL (VALUES ('SELLABLE',s.sellable),('TRANSIT',s.in_transit),('DAMAGED',s.damaged)) v(stock_state,expected)
+), snapshot_balances AS (
+ SELECT *,sum(quantity) OVER(PARTITION BY sku_id,location_id,stock_state
+ ORDER BY business_day,marker ROWS UNBOUNDED PRECEDING) balance FROM stock_timeline
 ), snapshot_ledger AS (
- SELECT s.snapshot_date,s.sku_id,s.location_id,s.sellable,s.in_transit,s.damaged,
- COALESCE(sum(m.quantity) FILTER(WHERE m.stock_state='SELLABLE'),0) ls,
- COALESCE(sum(m.quantity) FILTER(WHERE m.stock_state='TRANSIT'),0) lt,
- COALESCE(sum(m.quantity) FILTER(WHERE m.stock_state='DAMAGED'),0) ld
- FROM source.inventory_snapshots s LEFT JOIN source.inventory_movements m
- ON m.sku_id=s.sku_id AND m.location_id=s.location_id
- AND (m.event_at AT TIME ZONE 'Asia/Kolkata')::date<=s.snapshot_date
- GROUP BY s.snapshot_date,s.sku_id,s.location_id
+ SELECT business_day AS snapshot_date,sku_id,location_id,
+ max(expected) FILTER(WHERE stock_state='SELLABLE') sellable,
+ max(expected) FILTER(WHERE stock_state='TRANSIT') in_transit,
+ max(expected) FILTER(WHERE stock_state='DAMAGED') damaged,
+ max(balance) FILTER(WHERE stock_state='SELLABLE') ls,
+ max(balance) FILTER(WHERE stock_state='TRANSIT') lt,
+ max(balance) FILTER(WHERE stock_state='DAMAGED') ld
+ FROM snapshot_balances WHERE marker=1 GROUP BY 1,2,3
 )
 SELECT 'order_quantity' check_name,count(*) failures FROM line_totals WHERE fulfilled+cancelled<>quantity
 UNION ALL SELECT 'discount_limit',count(*) FROM line_totals WHERE discount>quantity*original_unit_price
@@ -37,7 +52,7 @@ UNION ALL SELECT 'tax_jurisdiction',count(*) FROM source.invoice_lines il JOIN s
 UNION ALL SELECT 'credit_limit',count(*) FROM credits c JOIN source.invoice_lines il USING(invoice_line_id) WHERE c.q>il.quantity OR c.v>il.taxable_value OR c.c>il.cgst OR c.s>il.sgst OR c.i>il.igst
 UNION ALL SELECT 'return_window',count(*) FROM source.return_items ri JOIN source.return_requests r USING(return_id) JOIN source.invoice_lines il USING(invoice_line_id)
  JOIN source.sales_invoices i USING(invoice_id) JOIN source.fulfillments f USING(fulfillment_id)
- WHERE r.order_id<>i.order_id OR r.requested_at<f.delivered_at OR r.requested_at>f.delivered_at+interval '14 days'
+ WHERE f.delivered_at IS NULL OR r.order_id<>i.order_id OR r.requested_at<f.delivered_at OR r.requested_at>f.delivered_at+interval '14 days'
 UNION ALL SELECT 'refund_limit',count(*) FROM refunds r JOIN source.payment_transactions p ON p.payment_txn_id=r.original_transaction_id WHERE r.amount>p.amount
 UNION ALL SELECT 'negative_stock',count(*) FROM stock WHERE balance<0
 UNION ALL SELECT 'snapshot_reconciliation',count(*) FROM snapshot_ledger WHERE sellable<>ls OR in_transit<>lt OR damaged<>ld

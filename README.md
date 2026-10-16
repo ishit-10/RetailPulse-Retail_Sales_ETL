@@ -6,6 +6,107 @@ A reproducible Python/PostgreSQL project for **Vastra Collective**, a fictional 
 
 **No payment, credit card, billing account, Docker Desktop, AWS or Supabase is needed.** PostgreSQL, generation, validation and Parquet files run locally. GitHub Actions is optional. Streamlit dashboards are a later stage; this package does not claim to implement or deploy them.
 
+## Continue the existing Stage 2 project (PostgreSQL 17)
+
+Use these commands for the existing `~/Developer/retailpulse` checkout and
+`data/raw/batch_001`. **Do not regenerate that dataset or reset either existing
+database.** The original setup instructions below are for new installations.
+The current batch spans April 2025–September 2026; the manifest governs its dates.
+
+After applying the reviewed patch on `feature/resumable-seed-loader`:
+
+```bash
+cd "$HOME/Developer/retailpulse"
+source .venv/bin/activate
+python -m pip install -e .
+python -m pytest -m 'not integration' -q
+python -m retailpulse doctor
+python -m retailpulse migrate-loader
+python -m retailpulse seed-status
+```
+
+The migration adds ETL checkpoint tables; it does not reload or change source
+records. Preserve `backups/retailpulse_before_loader_change.dump` locally.
+The console command `retailpulse` is equivalent to `python -m retailpulse` after
+editable installation. `init` alone does not apply the new loader migration.
+
+Check the **connected server's** data directory as your existing Homebrew
+administrator (the macOS login that owns the cluster), then use that value:
+
+```bash
+export PATH="$(brew --prefix postgresql@17)/bin:$PATH"
+psql -h 127.0.0.1 -p 5432 -U "$USER" -d postgres -c 'SHOW data_directory;'
+psql -h 127.0.0.1 -p 5432 -U "$USER" -d postgres -c 'SHOW max_wal_size;' -c 'SHOW wal_keep_size;'
+```
+
+For a standard Apple Silicon Homebrew installation the directory is often
+`/opt/homebrew/var/postgresql@17`; **use the verified output**, not that assumption.
+The app role may not be allowed to read `data_directory`, so the explicit option
+below is supported. If it can read the setting, the two paths must agree.
+
+```bash
+# Replace this placeholder with the verified directory from SHOW data_directory.
+export RETAILPULSE_PGDATA='/verified/path/to/postgresql@17'
+python -m retailpulse seed --data "$HOME/Developer/retailpulse/data/raw/batch_001" \
+  --pg-data-dir "$RETAILPULSE_PGDATA" --preflight-only
+```
+
+Preflight hashes files, verifies existing checkpoints and measures free space on
+PostgreSQL's data/WAL/tablespace volumes without inserting any source rows. The
+last reported **8.3 GiB is below the 10 GiB reserve**, even before estimated
+remaining data/index/WAL growth. Free space first; the command prints the actual
+required amount. Do not delete PostgreSQL WAL or backups to bypass this guard.
+
+Once preflight passes and the isolated tests below pass:
+
+```bash
+python -m retailpulse seed --data "$HOME/Developer/retailpulse/data/raw/batch_001" \
+  --pg-data-dir "$RETAILPULSE_PGDATA" --chunk-rows 5000
+python -m retailpulse seed-status
+python -m retailpulse verify-db
+psql -h 127.0.0.1 -U retailpulse_app -d retailpulse -W \
+  -c 'SELECT batch_id,status,loaded_at FROM source.ingestion_batches;' \
+  -c 'SELECT batch_id,state,error_class FROM etl.seed_runs;' \
+  -c 'SELECT count(*) FROM source.sales_orders;'
+```
+
+After interruption, recover service/free space as needed and rerun the **same
+seed command**. It resumes committed chunks. Changing `--chunk-rows` is supported.
+Only successful final reconciliation sets `LOADED`/`completed`. Expect 100,000
+orders if that is the manifest count; this repository change does not itself
+load your Mac. See [transaction and recovery design](docs/RESUMABLE_LOADER.md) and
+[current test evidence](docs/LOADER_TEST_RESULTS.md).
+
+## Optional guarded low-disk mode
+
+The default 10 GiB reserve is deliberately conservative. After reviewing server
+settings, `--low-disk` offers a 3 GiB reserve plus the same remaining-data allowance,
+with chunks capped at 1,000 rows. It rejects WAL configurations outside its supported
+limits and retains every integrity check. It does not guarantee that the full import
+will fit; other apps, swap, WAL and temporary files may consume additional space.
+See the [low-disk design and limitations](docs/RESUMABLE_LOADER.md).
+
+For the verified Homebrew path in this project, first run **preflight only**:
+
+```bash
+python -m retailpulse seed --data data/raw/batch_001 \
+  --pg-data-dir /opt/homebrew/var/postgresql@17 --low-disk --preflight-only
+```
+
+Run the isolated native integration tests described below before importing with
+the new mode. If the tests and preflight pass, the corresponding import is:
+
+```bash
+python -m retailpulse seed --data data/raw/batch_001 \
+  --pg-data-dir /opt/homebrew/var/postgresql@17 --low-disk
+python -m retailpulse seed-status
+python -m retailpulse verify-db
+```
+
+Do not edit the reserve constant or disable disk checks. A space refusal is resumable;
+use the same dataset after adequate space becomes available. This option changes no
+server settings, operational data definitions, or data volume.
+
 ## What is included
 
 - Normalized SQL source schema preserving all 31 Stage 1 logical tables, plus explicit FIFO cost allocation, refund history, safety-stock, snapshot and rejected-demand tables.
@@ -38,14 +139,14 @@ If that folder already exists, choose a new destination. In VS Code, use **File 
 ### 2. Install Python and PostgreSQL
 
 ```bash
-brew install python@3.12 postgresql@16
-export PATH="$(brew --prefix postgresql@16)/bin:$(brew --prefix python@3.12)/bin:$PATH"
-brew services start postgresql@16
+brew install python@3.12 postgresql@17
+export PATH="$(brew --prefix postgresql@17)/bin:$(brew --prefix python@3.12)/bin:$PATH"
+brew services start postgresql@17
 pg_isready -h 127.0.0.1 -p 5432
 psql -d postgres -c 'SELECT version(), current_user;'
 ```
 
-`postgresql@16` is keg-only, so the PATH command matters on both Apple Silicon and Intel Macs. Add that same `export PATH=...` line to `~/.zshrc` if you want it in future terminals. `pg_isready` only checks service readiness; it does **not** prove application credentials work.
+`postgresql@17` is keg-only, so the PATH command matters on both Apple Silicon and Intel Macs. Add that same `export PATH=...` line to `~/.zshrc` if you want it in future terminals. `pg_isready` only checks service readiness; it does **not** prove application credentials work.
 
 If port 5432 is already occupied, inspect `brew services list` and your existing database service. Do not delete `postmaster.pid` or existing database directories to force this setup.
 
@@ -97,17 +198,19 @@ python -m retailpulse generate --orders 1000 --styles 2 --customers 100 --out da
 python -m retailpulse verify-files --data data/smoke
 ```
 
-The generator holds records in memory. Close memory-heavy apps for the default run; reserve several GB of free RAM and at least 2 GB free disk for generation, PostgreSQL and backups. Actual measured generation figures are in the test report. The smoke profile is suitable for initial checks on constrained machines.
+The generator holds records in memory. Close memory-heavy apps for the default run; reserve several GB of free RAM. Loading requires the measured disk allowance described above, in addition to space for generation and backups. Actual measured generation figures are in the test report. The smoke profile is suitable for initial checks on constrained machines.
 
 ### 7. Load and verify
 
 ```bash
+python -m retailpulse migrate-loader
+python -m retailpulse seed --data data/raw/seed-42 --preflight-only
 python -m retailpulse seed --data data/raw/seed-42
 python -m retailpulse verify-db
 python -m pytest -q
 ```
 
-The loader validates checksums and business rules, loads in foreign-key order, runs SQL checks, then commits. Any failure rolls back the entire load. Repeating the same manifest is a no-op. A different dataset requires an explicitly cleared database. The current seed command is a complete initial load, **not** an incremental ETL implementation.
+The loader hashes input files, loads in foreign-key order using bounded COPY transactions and durable checkpoints, and runs final SQL reconciliation. A failure rolls back only its current chunk. Earlier chunks remain resumable; partial data is not certified. Repeating the same completed manifest inserts no duplicates. A different dataset is refused. This is Stage 2 source loading, not Stage 3 incremental ETL. If disk discovery needs an explicit path, use the verified `--pg-data-dir` option above.
 
 Verification requires all named checks to pass. `pytest` skips database integration tests unless you explicitly configure the separate test database below.
 
@@ -120,44 +223,51 @@ psql -h 127.0.0.1 -U retailpulse_app -d retailpulse -W \
 
 Expected: GMV ₹6,000; discount ₹1,200; booked merchandise ₹4,800; net sales ₹2,400; net COGS ₹1,200; gross profit ₹1,200; gross margin 0.50; successful refund ₹2,520; net units 1. Original invoice GST totals ₹240. Two unit-level invoice lines reference one two-unit order line.
 
-## Reset and regenerate
+## Reset (explicitly destructive; not a recovery step)
 
-**This clears all synthetic rows in the named database.** It leaves the schema and generated files intact and refuses unknown database names or remote hosts.
-
-```bash
-python -m retailpulse reset --confirm-database retailpulse
-python -m retailpulse seed --data data/raw/seed-42
-```
-
-No `DROP DATABASE`, no cascading drops, and no automatic overwrite of existing raw files. A schema migration beyond v1 must be explicitly designed; `init` is not a general migration engine.
+`python -m retailpulse reset --confirm-database NAME` clears synthetic source rows
+and associated loader checkpoints only when NAME matches `retailpulse` or
+`retailpulse_test`. It uses the same advisory lock and retains schema/files.
+Do not use it on your current production dataset or existing 500-order test data
+as part of this change. Recovery normally means rerunning `seed`.
 
 ## Run PostgreSQL integration tests on your Mac
 
-Create a separate disposable database using your Homebrew administrator:
+Your existing `retailpulse_test` contains 500 orders. Preserve it. Run the tests in
+an isolated temporary PostgreSQL 17 cluster on **port 55432**, with a new database
+also named `retailpulse_test`. No Docker is needed. These commands create synthetic
+test data only and use loopback trust authentication for this disposable cluster.
+Do not change your production cluster's authentication.
 
 ```bash
-createdb --owner=retailpulse_app retailpulse_test
-```
-
-Keep credentials out of shell history. Set the test URL from the existing `.env` values:
-
-```bash
-export RETAILPULSE_TEST_DATABASE_URL="$(python - <<'PY'
-from retailpulse.db import engine
-print(engine().url.set(database='retailpulse_test').render_as_string(hide_password=False))
-PY
-)"
-python -m pytest -m integration -q
+cd "$HOME/Developer/retailpulse"
+source .venv/bin/activate
+export PATH="$(brew --prefix postgresql@17)/bin:$PATH"
+export RETAILPULSE_TEST_PGDATA="$(mktemp -d /tmp/retailpulse-pg17.XXXXXX)"
+initdb -D "$RETAILPULSE_TEST_PGDATA" -U retailpulse_test_runner --auth=trust
+pg_ctl -D "$RETAILPULSE_TEST_PGDATA" -l "$RETAILPULSE_TEST_PGDATA/server.log" \
+  -o "-h 127.0.0.1 -p 55432 -k $RETAILPULSE_TEST_PGDATA" start
+createdb -h 127.0.0.1 -p 55432 -U retailpulse_test_runner retailpulse_test
+export RETAILPULSE_TEST_DATABASE_URL='postgresql+psycopg://retailpulse_test_runner@127.0.0.1:55432/retailpulse_test'
+python -m pytest -q
+pg_ctl -D "$RETAILPULSE_TEST_PGDATA" -m fast stop
 unset RETAILPULSE_TEST_DATABASE_URL
 ```
 
-Tests require an empty `retailpulse_test` and intentionally leave their data available for inspection. Before rerunning, clear only the test dataset explicitly:
+If port 55432 is occupied, stop here and select another unused test port in each
+command and the URL; do not stop your existing service. If startup fails, do not continue
+with database creation or tests. The temporary directory is retained for logs;
+after testing you can remove that **specific disposable directory** manually.
+The suite refuses pre-existing rows and only cleans up its own initially empty
+test database. It never changes the `.env` production connection.
 
-```bash
-PGDATABASE=retailpulse_test python -m retailpulse reset --confirm-database retailpulse_test
-```
-
-Integration tests check SQL initialization, actual `COPY` load, repeated-batch idempotency, SQL reconciliation and rejected invalid writes. They are not replaced by SQLite mocks. This project's optional CI uses a PostgreSQL service container **on GitHub's runner**; no local Docker is required. Use standard runners in a public repository; do not enable paid larger runners. Provider policies may change, and the full local workflow never depends on CI.
+Integration tests cover real SQL/COPY, resume after exceptions, abrupt process
+exit and lost connections, duplicate prevention, trigger/FK protection, row counts,
+final reconciliation and status transitions. The database tests substitute disk
+probes for CI container compatibility; the disk policy has independent unit tests.
+Run production `seed --preflight-only` above to check native macOS volume discovery.
+CI uses a PostgreSQL 17 service on GitHub's standard runner; the existing CI pass
+predates this change and does not prove these new integration tests have passed.
 
 ## Back up locally
 
@@ -194,7 +304,7 @@ Do not use `git add -f` on data or secrets. No GitHub repository is created or p
 
 ## Reference documentation
 
-- Homebrew PostgreSQL 16: <https://formulae.brew.sh/formula/postgresql@16>
+- Homebrew PostgreSQL 17: <https://formulae.brew.sh/formula/postgresql@17>
 - psycopg COPY: <https://www.psycopg.org/psycopg3/docs/basic/copy.html>
 - PostgreSQL constraints: <https://www.postgresql.org/docs/16/ddl-constraints.html>
 

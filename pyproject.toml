@@ -6,6 +6,9 @@ name = "retailpulse"
 version = "1.0.0"
 requires-python = ">=3.11"
 dynamic = ["dependencies"]
+[project.scripts]
+retailpulse = "retailpulse.__main__:main"
+
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 [tool.setuptools]
