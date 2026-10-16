@@ -6,6 +6,37 @@ A reproducible Python/PostgreSQL project for **Vastra Collective**, a fictional 
 
 **No payment, credit card, billing account, Docker Desktop, AWS or Supabase is needed.** PostgreSQL, generation, validation and Parquet files run locally. GitHub Actions is optional. Streamlit dashboards are a later stage; this package does not claim to implement or deploy them.
 
+## Stage 4 analytics warehouse (feature branch)
+
+Stage 2 and Stage 3 are merged and locally verified. Stage 4 is implemented and locally verified on
+`feature/analytics-layer`: 117 native-suite tests passed, the 100,000-order
+warehouse loaded and verified, and an identical rerun returned `unchanged`.
+These Mac results were supplied by the project owner on 17 October 2026.
+Stage 4 has not yet been pushed or merged. It consumes the latest published Parquet snapshot,
+builds dimensions/facts privately, reconciles the approved retail calculations,
+and atomically publishes warehouse reader views in `analytics`. Existing
+source-backed analytics views, seed loader, source records and lake remain intact.
+
+Read [the warehouse guide](docs/ANALYTICS_WAREHOUSE.md) for grains, KPI rules,
+unsupported dimensions, disk safety, recovery, and the isolated macOS test
+commands. [Actual validation results](docs/WAREHOUSE_TEST_RESULTS.md) distinguish
+executed checks from tests that require your local PostgreSQL instance.
+
+After native tests pass and a fresh lake snapshot is available:
+
+```bash
+python -m retailpulse migrate-warehouse
+python -m retailpulse warehouse-load --lake-root "$HOME/Developer/retailpulse/data" --pg-data-dir "/opt/homebrew/var/postgresql@17" --preflight-only
+# Continue only if preflight passes:
+caffeinate -i python -m retailpulse warehouse-load --lake-root "$HOME/Developer/retailpulse/data" --pg-data-dir "/opt/homebrew/var/postgresql@17"
+python -m retailpulse verify-warehouse
+python -m retailpulse warehouse-kpi sales --start 2025-04-01 --end 2026-09-30
+```
+
+The warehouse needs additional PostgreSQL storage beyond the small Parquet lake.
+Its 3 GiB reserve plus build estimate must pass; do not bypass it on a nearly
+full Mac. No dashboard or paid infrastructure is introduced.
+
 ## Continue the existing Stage 2 project (PostgreSQL 17)
 
 Use these commands for the existing `~/Developer/retailpulse` checkout and
