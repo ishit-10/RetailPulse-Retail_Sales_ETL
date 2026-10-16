@@ -9,7 +9,7 @@ from . import db
 def main():
     p=argparse.ArgumentParser(description='RetailPulse — entirely synthetic local retail data')
     sub=p.add_subparsers(dest='command',required=True)
-    for name in ['doctor','init','verify-db','seed-status','migrate-loader','migrate-etl']: sub.add_parser(name)
+    for name in ['doctor','init','verify-db','seed-status','migrate-loader','migrate-etl','migrate-warehouse','verify-warehouse','warehouse-status']: sub.add_parser(name)
     g=sub.add_parser('generate'); g.add_argument('--orders',type=int,default=100000); g.add_argument('--seed',type=int,default=42)
     g.add_argument('--start',default='2025-01-01'); g.add_argument('--end',default='2026-06-30')
     g.add_argument('--styles',type=int,default=40); g.add_argument('--customers',type=int,default=20000)
@@ -25,6 +25,19 @@ def main():
     for name in ['etl-run', 'etl-status', 'verify-lake']:
         command = sub.add_parser(name)
         command.add_argument('--lake-root', default='data')
+    cleanup=sub.add_parser('warehouse-cleanup')
+    cleanup.add_argument('--include-previous', action='store_true')
+    w=sub.add_parser('warehouse-load')
+    w.add_argument('--lake-root', default='data')
+    w.add_argument('--max-snapshot-age-hours', type=float, default=24)
+    w.add_argument('--preflight-only', action='store_true')
+    w.add_argument('--pg-data-dir')
+    k=sub.add_parser('warehouse-kpi')
+    k.add_argument('report', choices=['sales','daily','weekly','monthly','products','categories','stores','channels','returns','refunds','footfall','inventory','sell-through'])
+    k.add_argument('--start', required=True)
+    k.add_argument('--end', required=True)
+    k.add_argument('--as-of')
+    k.add_argument('--filters', default='{}', help='JSON object: city/state_id/store_id/channel/category_id/style_id/sku_id/customer_id')
     r=sub.add_parser('reset'); r.add_argument('--confirm-database',required=True)
     a=p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -45,6 +58,14 @@ def main():
                     elif a.command == 'etl-run': result = etl.run(e, a.lake_root)
                     elif a.command == 'etl-status': result = etl.status(e, a.lake_root)
                     else: result = etl.verify(e, a.lake_root)
+                elif a.command in ('migrate-warehouse','warehouse-load','verify-warehouse','warehouse-status','warehouse-kpi','warehouse-cleanup'):
+                    from . import warehouse, kpis
+                    if a.command == 'migrate-warehouse': result = warehouse.migrate(e)
+                    elif a.command == 'warehouse-load': result = warehouse.run(e, a.lake_root, a.max_snapshot_age_hours, a.preflight_only, a.pg_data_dir)
+                    elif a.command == 'verify-warehouse': result = warehouse.verify(e)
+                    elif a.command == 'warehouse-cleanup': result = warehouse.cleanup(e, a.include_previous)
+                    elif a.command == 'warehouse-status': result = warehouse.status(e)
+                    else: result = kpis.report(e, a.report, a.start, a.end, json.loads(a.filters), a.as_of)
                 elif a.command=='migrate-loader':
                     from .loader import migrate
                     result=migrate(e)
