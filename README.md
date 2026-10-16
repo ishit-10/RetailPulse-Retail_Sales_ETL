@@ -311,3 +311,36 @@ Do not use `git add -f` on data or secrets. No GitHub repository is created or p
 GST rules here are the approved project's synthetic historical contract, not tax-compliance advice. No empirical seasonality or behavior claims are made.
 
 - GitHub standard public runners: <https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job>
+
+## Stage 3 — incremental local Parquet lake
+
+Stage 3 preserves the operational schema and resumable loader. It uses a consistent
+PostgreSQL snapshot and full-scan partition change detection because the source
+has no reliable universal update timestamp. Only changed Parquet partitions are
+published. Backdated records, mutable updates, cancellations/refunds and deletions
+are captured without timestamp watermarks or source triggers.
+
+```bash
+cd "$HOME/Developer/retailpulse"
+source .venv/bin/activate
+python -m retailpulse migrate-etl
+caffeinate -i python -m retailpulse etl-run --lake-root "$HOME/Developer/retailpulse/data"
+python -m retailpulse etl-status --lake-root "$HOME/Developer/retailpulse/data"
+python -m retailpulse verify-lake --lake-root "$HOME/Developer/retailpulse/data"
+```
+
+Run the isolated integration tests documented in [ETL_PIPELINE.md](docs/ETL_PIPELINE.md)
+before the first full extraction. That guide includes the exact Mac test commands,
+additive migration, table mappings, snapshot/checkpoint semantics, manifest-based
+read API, disk guard, and interruption recovery. Repeat the same `etl-run` command
+to resume or refresh. An unchanged source should report zero changed partitions.
+
+Generated files live under `data/raw/extract/` and `data/processed/extract/`; existing
+`data/raw/batch_001/` stays untouched. Raw/processed files share disk blocks using
+hardlinks. Read the published manifest, **never glob all historical Parquet files**.
+The database head switches atomically after validation, so failed runs retain the
+previous complete lake. Historical objects consume space; automatic retention is
+not part of v1. A 3 GiB free-space reserve is checked during writes.
+
+See [Stage 3 test results](docs/ETL_TEST_RESULTS.md) for executed checks and remaining
+native PostgreSQL verification. No dashboard or cloud service is introduced.
