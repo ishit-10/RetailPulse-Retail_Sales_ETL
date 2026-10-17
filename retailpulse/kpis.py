@@ -34,7 +34,8 @@ def predicate(filters, alias='o'):
     return ' AND '.join(f'{alias}.{key}=:{key}' for key in sorted(filters)) or 'true'
 
 
-def report(e, kind, start, end, filters=None, as_of=None):
+def build_query(kind, start, end, filters=None, as_of=None):
+    """Shared SQL contract for CLI and dashboard; no database access here."""
     filters = {} if filters is None else filters
     params = parameters(start, end, filters)
     scope = f'WITH scoped AS (SELECT * FROM ({SCOPE}) o WHERE {predicate(filters)}) '
@@ -149,6 +150,11 @@ def report(e, kind, start, end, filters=None, as_of=None):
  FROM pool CROSS JOIN sold CROSS JOIN returned'''
     else:
         raise ValueError('Unknown report; refund rate has no approved denominator and is not implemented')
+    return query, params
+
+
+def report(e, kind, start, end, filters=None, as_of=None):
+    query, params = build_query(kind, start, end, filters, as_of)
     with e.connect().execution_options(isolation_level='REPEATABLE READ') as c, c.begin():
         lineage = c.exec_driver_sql('SELECT r.snapshot_id FROM etl.warehouse_head h JOIN etl.warehouse_runs r USING(run_id)').scalar()
         if lineage is None:

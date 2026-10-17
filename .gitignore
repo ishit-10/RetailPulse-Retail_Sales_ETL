@@ -45,3 +45,18 @@ __pycache__/
 /logs/
 *.log
 .DS_Store
+
+# Streamlit credentials stay local. Only the reviewed compact synthetic demo is tracked.
+.streamlit/secrets.toml
+!demo/warehouse/dim_date.parquet
+!demo/warehouse/dim_product.parquet
+!demo/warehouse/dim_store.parquet
+!demo/warehouse/dim_state.parquet
+!demo/warehouse/dim_channel.parquet
+!demo/warehouse/fact_order_items.parquet
+!demo/warehouse/fact_sales.parquet
+!demo/warehouse/fact_returns.parquet
+!demo/warehouse/fact_refunds.parquet
+!demo/warehouse/fact_inventory_daily.parquet
+!demo/warehouse/fact_inventory_movements.parquet
+!demo/warehouse/fact_footfall_daily.parquet
