@@ -1,0 +1,64 @@
+{
+  "format_version": 1,
+  "synthetic": true,
+  "bundle_id": "retailpulse-demo-500-v1",
+  "created_at": "2026-10-16T22:08:56.996452+00:00",
+  "provenance": "Existing generator: seed 42, 500 orders, 2 styles, 50 customers. Stage 4 SQL built in PGlite 0.5.10; 30 source business checks passed. No live pipeline audit is included.",
+  "expected": {
+    "orders": 500,
+    "gmv": "2153636.00",
+    "net_sales": "1769721.56",
+    "net_cogs": "864926.33",
+    "gross_profit": "904795.23"
+  },
+  "tables": {
+    "dim_date": {
+      "rows": 577,
+      "sha256": "19a52ec5846970b2b1e8024ec98b268c3e355adfa3b0c91089e7287c13b4d96f"
+    },
+    "dim_product": {
+      "rows": 12,
+      "sha256": "54703ebd5656efb6f9f96adba2d8ad0c36895d880ec3fe9413919f0d8d419c31"
+    },
+    "dim_store": {
+      "rows": 15,
+      "sha256": "1560c95b862adff35cf6ed07ea1862223c931f8ac90059a1597b576b6f234d80"
+    },
+    "dim_state": {
+      "rows": 5,
+      "sha256": "5000214c36f591a090d0ef3409e23a707df1dd4c429886d6407640d35d91041b"
+    },
+    "dim_channel": {
+      "rows": 3,
+      "sha256": "fa29ea4ac14f647fe26de984aa8846b4cce1cf427c49c23233af584dae5a4d92"
+    },
+    "fact_order_items": {
+      "rows": 970,
+      "sha256": "e28b3a9c621ada89bd074d36697b7327de17497c0f7bd55cb3ba98b02b273eca"
+    },
+    "fact_sales": {
+      "rows": 995,
+      "sha256": "59996b5838bfa18914f281391f98d8c0355fd2fe1fb40f6e74d5342495e2f9ab"
+    },
+    "fact_returns": {
+      "rows": 72,
+      "sha256": "bb1f6acd417b45db103d25d192c181e66906b95a94aa3e177296ae1067fa77f3"
+    },
+    "fact_refunds": {
+      "rows": 100,
+      "sha256": "1c430e6deff954c19354cffe1b90f842e2d74e73fc7723bb7f149ef8203437a7"
+    },
+    "fact_inventory_daily": {
+      "rows": 3418,
+      "sha256": "d3af0f598e499b2889d63f0d704941d60a156067c0ada6d1556bce394a898ebd"
+    },
+    "fact_inventory_movements": {
+      "rows": 2731,
+      "sha256": "54a6af1b43b2bfb53e7bd6de91659f70980dd009acc42a0491c99adf1bc03976"
+    },
+    "fact_footfall_daily": {
+      "rows": 6552,
+      "sha256": "14e1f0238e1509b11587e72d0f2fdc8130087845fd9438207f92eca834d22d1c"
+    }
+  }
+}

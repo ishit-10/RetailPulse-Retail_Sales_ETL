@@ -1,18 +1,45 @@
-# RetailPulse — local synthetic retail source system
+# RetailPulse — Retail Data Engineering & Analytics Platform
 
 A reproducible Python/PostgreSQL project for **Vastra Collective**, a fictional Indian omnichannel apparel retailer. No real customers, GST registrations, sales evidence, or market benchmarks are used. Faker names are explicitly marked synthetic; no contact details are generated.
 
 **Default:** 100,000 orders confirmed from **1 January 2025 through 30 June 2026**, 20,000 fictional customers, 12 stores, 2 fulfillment centers, 1 logical transit location, 40 styles and 240 SKUs. Returns and deliveries settle through 31 July 2026. All merchandise money uses `Decimal` and PostgreSQL `NUMERIC`; dates report in Asia/Kolkata.
 
-**No payment, credit card, billing account, Docker Desktop, AWS or Supabase is needed.** PostgreSQL, generation, validation and Parquet files run locally. GitHub Actions is optional. Streamlit dashboards are a later stage; this package does not claim to implement or deploy them.
+**No payment, credit card, billing account, Docker Desktop, AWS or Supabase is needed.** PostgreSQL, generation, validation and Parquet files run locally. GitHub Actions is optional. Stage 5 adds a local Streamlit dashboard and a compact offline demo; no application is deployed.
 
-## Stage 4 analytics warehouse (feature branch)
+## Stage 5 — Streamlit retail intelligence
+
+Five pages cover executive KPIs, stores/channels, products/inventory,
+customers/orders and pipeline health. Shared dependent filters persist across
+pages. Local mode reads the existing published analytics warehouse in read-only
+transactions; default demo mode reads a compact, consistent 500-order synthetic
+fixture with no database or credentials. Region, brand and detailed workflow
+statuses are explicitly unavailable where the source does not support them.
+
+```bash
+cd "$HOME/Developer/retailpulse"
+source .venv/bin/activate
+python -m pip install -e .
+python -m pytest -m 'not integration' -q
+RETAILPULSE_DASHBOARD_MODE=demo python -m streamlit run streamlit_app.py
+# Stop with Control-C, then use your existing private PostgreSQL configuration:
+RETAILPULSE_DASHBOARD_MODE=local python -m streamlit run streamlit_app.py
+```
+
+Open `http://localhost:8501`. No new database migration, seed or ETL run is needed
+if Stage 4 is already published. Do not rerun bulk ingestion just to launch the UI.
+See [DASHBOARD.md](docs/DASHBOARD.md) for filter semantics, approved KPI reuse,
+optional read-only role, native macOS tests and demo differences.
+[Dashboard test results](docs/DASHBOARD_TEST_RESULTS.md): **125 passed, 31 skipped**
+in the implementation workspace; native PostgreSQL and browser visual QA remain
+local verification steps. Nothing has been deployed, pushed or merged for Stage 5.
+
+## Stage 4 analytics warehouse
 
 Stage 2 and Stage 3 are merged and locally verified. Stage 4 is implemented and locally verified on
-`feature/analytics-layer`: 117 native-suite tests passed, the 100,000-order
+the merged Stage 4 implementation: 117 native-suite tests passed, the 100,000-order
 warehouse loaded and verified, and an identical rerun returned `unchanged`.
 These Mac results were supplied by the project owner on 17 October 2026.
-Stage 4 has not yet been pushed or merged. It consumes the latest published Parquet snapshot,
+Stage 4 was merged through PR #2 (`7b97067`). It consumes the latest published Parquet snapshot,
 builds dimensions/facts privately, reconciles the approved retail calculations,
 and atomically publishes warehouse reader views in `analytics`. Existing
 source-backed analytics views, seed loader, source records and lake remain intact.
@@ -35,7 +62,7 @@ python -m retailpulse warehouse-kpi sales --start 2025-04-01 --end 2026-09-30
 
 The warehouse needs additional PostgreSQL storage beyond the small Parquet lake.
 Its 3 GiB reserve plus build estimate must pass; do not bypass it on a nearly
-full Mac. No dashboard or paid infrastructure is introduced.
+full Mac. The dashboard does not require another warehouse load or migration.
 
 ## Continue the existing Stage 2 project (PostgreSQL 17)
 
@@ -374,4 +401,4 @@ previous complete lake. Historical objects consume space; automatic retention is
 not part of v1. A 3 GiB free-space reserve is checked during writes.
 
 See [Stage 3 test results](docs/ETL_TEST_RESULTS.md) for executed checks and remaining
-native PostgreSQL verification. No dashboard or cloud service is introduced.
+native PostgreSQL verification. Stage 3 itself introduces no dashboard or cloud service.

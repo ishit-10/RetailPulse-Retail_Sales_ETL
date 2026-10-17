@@ -12,7 +12,7 @@ retailpulse = "retailpulse.__main__:main"
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 [tool.setuptools]
-packages = ["retailpulse"]
+packages = ["retailpulse", "retailpulse.dashboard", "retailpulse.dashboard.pages"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["integration: requires explicitly configured disposable PostgreSQL database"]
