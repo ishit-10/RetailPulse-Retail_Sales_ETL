@@ -17,8 +17,16 @@ def product_options(metadata, category_id=None):
 
 def render(metadata):
     import streamlit as st
+    low=metadata['coverage']['min_date']; high=metadata['coverage']['max_date']
+    # Default bookings window; outcome tail can be selected explicitly.
+    default=(max(low,metadata['booking_dates']['min_date'].replace(day=1)),metadata['booking_dates']['max_date'])
     def reset():
-        for key in KEYS: st.session_state.pop('global_'+key, None)
+        # Assign widget values so Streamlit sends the reset to the browser.
+        # Deleting keys can rehydrate the previous frontend selection on rerun.
+        defaults=dict.fromkeys(KEYS)
+        defaults.update(date=default, grain='month', as_of=high)
+        for key, value in defaults.items():
+            st.session_state['global_'+key]=value
     def choice(label, key, values, labels=None, disabled=False):
         full = [None]+list(values)
         state_key='global_'+key
@@ -27,9 +35,6 @@ def render(metadata):
     with st.sidebar:
         st.markdown('### Explore the business')
         st.button('Reset filters', on_click=reset, use_container_width=True)
-        low=metadata['coverage']['min_date']; high=metadata['coverage']['max_date']
-        # Default bookings window; outcome tail can be selected explicitly.
-        default=(max(low,metadata['booking_dates']['min_date'].replace(day=1)),metadata['booking_dates']['max_date'])
         dates=st.date_input('Business dates',value=default,min_value=low,max_value=high,key='global_date',format='DD/MM/YYYY')
         if len(dates)!=2:
             st.info('Choose both a start and end date.'); st.stop()

@@ -81,3 +81,22 @@ additional tests cover cloud startup/forced demo, missing imports and runtime
 version rejection. Native database tests were not repeated in this workspace.
 See [cloud deployment instructions](../cloud/README.md). No live deployment
 success is claimed until the public URL is checked.
+
+### Public deployment check and filter reset correction
+
+The public demo at https://retailpulsee.streamlit.app/ was inspected in a
+browser. All five pages loaded. Website-channel filtering persisted across
+pages and disabled unsupported city/store filters. A reset defect was observed:
+totals briefly reset while the browser retained Website, which became active
+again on navigation.
+
+The reset callback now assigns default widget values explicitly instead of
+deleting session-state keys. Added an AppTest covering channel/category/date,
+trend and observation-cutoff reset followed by page changes.
+
+Validation of this correction in a fresh Python 3.12 environment:
+- Non-integration suite: **129 passed, 31 deselected in 10.06 seconds**.
+- `git diff --check`: passed.
+- PostgreSQL integration tests were not run for this UI-only change.
+- The correction has not been pushed or deployed. A post-deployment browser
+  check of Reset filters remains required.
