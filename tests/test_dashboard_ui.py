@@ -36,3 +36,32 @@ def test_database_error_is_sanitized(monkeypatch):
     assert not app.exception
     assert app.error
     assert 'secret-password' not in app.error[0].value
+
+
+def test_reset_defaults_survive_page_change(monkeypatch):
+    monkeypatch.setenv('RETAILPULSE_DASHBOARD_MODE','demo')
+    app=AppTest.from_string(
+        "import streamlit as st\n"
+        "from retailpulse.dashboard.app import main\n"
+        "page=st.selectbox('Test page',['overview','customers'],key='test_page')\n"
+        "main(page_override=page)"
+    ).run(timeout=30)
+    original_dates=app.date_input(key='global_date').value
+    original_cutoff=app.date_input(key='global_as_of').value
+    app.selectbox(key='global_channel').set_value('WEB').run(timeout=30)
+    app.selectbox(key='global_category_id').set_value(1).run(timeout=30)
+    app.selectbox(key='global_grain').set_value('day').run(timeout=30)
+    app.date_input(key='global_date').set_value(
+        (original_dates[0],original_dates[0])).run(timeout=30)
+    app.date_input(key='global_as_of').set_value(original_dates[0]).run(timeout=30)
+    app.button[0].click().run(timeout=30)
+    for page in ('customers','overview'):
+        app.selectbox(key='test_page').set_value(page).run(timeout=30)
+        assert not app.exception and not app.error
+        for key in ('state_id','channel','city','store_id','category_id','sku_id'):
+            assert app.selectbox(key='global_'+key).value is None
+        assert not app.selectbox(key='global_city').disabled
+        assert not app.selectbox(key='global_store_id').disabled
+        assert app.selectbox(key='global_grain').value=='month'
+        assert app.date_input(key='global_date').value==original_dates
+        assert app.date_input(key='global_as_of').value==original_cutoff
