@@ -30,8 +30,9 @@ if Stage 4 is already published. Do not rerun bulk ingestion just to launch the 
 See [DASHBOARD.md](docs/DASHBOARD.md) for filter semantics, approved KPI reuse,
 optional read-only role, native macOS tests and demo differences.
 [Dashboard test results](docs/DASHBOARD_TEST_RESULTS.md): **125 passed, 31 skipped**
-in the implementation workspace; native PostgreSQL and browser visual QA remain
-local verification steps. Nothing has been deployed, pushed or merged for Stage 5.
+in the original implementation workspace. The owner subsequently reported
+**156 tests passed** on macOS and reviewed the local dashboard; Stage 5 was merged
+through PR #3. Public deployment verification is tracked separately.
 
 ## Stage 4 analytics warehouse
 
@@ -402,3 +403,11 @@ not part of v1. A 3 GiB free-space reserve is checked during writes.
 
 See [Stage 3 test results](docs/ETL_TEST_RESULTS.md) for executed checks and remaining
 native PostgreSQL verification. Stage 3 itself introduces no dashboard or cloud service.
+
+## Public demo deployment
+
+Use [`cloud/streamlit_app.py`](cloud/streamlit_app.py) as the Community Cloud
+entrypoint with **Python 3.12** and no secrets. Its adjacent runtime dependency
+file avoids ambiguity with root project metadata. The cloud entrypoint checks
+installed dependencies and forces synthetic demo mode. See
+[cloud/README.md](cloud/README.md) for exact setup and troubleshooting.

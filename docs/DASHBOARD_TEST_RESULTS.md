@@ -60,3 +60,24 @@ Production `data/`, generated bulk Parquet, `.env`, `.streamlit/secrets.toml`,
 backups, logs and virtual environments remain excluded. The optional reader-role
 script contains no password. No schema migration is needed for the dashboard.
 The Stage 4 query-builder refactor preserves its SQL and public CLI interface.
+
+## Owner verification and cloud startup follow-up — 17 October 2026
+
+The owner reported **156 passed in 162.68 seconds** on the isolated macOS
+PostgreSQL cluster; it stopped successfully afterward. The supplied local-mode
+Executive Overview screenshot showed the expected full-batch KPI values at
+displayed precision. Stage 5 was committed as 562ed27 and merged through PR #3.
+These are user-supplied Mac results, not cloud execution.
+
+Community Cloud subsequently failed importing dotenv despite the correct root
+requirements file. Its supplied log identifies Python 3.14.8 and confirms uv
+selected requirements.txt. The exact missing-package cause is not established.
+The `cloud/` entrypoint/dependency bundle makes the intended installation location
+explicit, forces the public synthetic demo, and diagnoses wrong runtime/missing
+imports before importing the database module. Fresh Python 3.12 cloud-only
+installation and all five page checks passed. With test-only dependencies added,
+the workspace suite passed **128 tests, 31 skipped in 11.20 seconds**. The three
+additional tests cover cloud startup/forced demo, missing imports and runtime
+version rejection. Native database tests were not repeated in this workspace.
+See [cloud deployment instructions](../cloud/README.md). No live deployment
+success is claimed until the public URL is checked.
